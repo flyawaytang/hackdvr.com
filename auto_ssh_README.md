@@ -9,6 +9,7 @@ This Python script provides an automated SSH login interface that supports both 
 - Executes specific commands based on detected prompts:
   - Sends 'show version' when '>' is detected
   - Sends 'uname -a' when '#' is detected
+- Handles pagination automatically (--More--, Press Enter to continue, etc.)
 - Interactive mode for manual command input
 - Timeout handling for connections and commands
 - Proper error handling and user feedback
@@ -32,7 +33,7 @@ pip install paramiko
 ```bash
 python auto_ssh.py --host HOST [--port PORT] [--username USERNAME] 
                   [--password PASSWORD] [--key KEY_FILE]
-                  [--timeout TIMEOUT]
+                  [--timeout TIMEOUT] [--no-pagination]
 ```
 
 ### Arguments
@@ -43,6 +44,7 @@ python auto_ssh.py --host HOST [--port PORT] [--username USERNAME]
 - `--password`: SSH password (required if --key is not provided)
 - `--key`: Path to SSH private key file (required if --password is not provided)
 - `--timeout`: Connection timeout in seconds (default: 10)
+- `--no-pagination`: Disable automatic pagination handling
 
 ### Examples
 
@@ -64,8 +66,30 @@ python auto_ssh.py --host 192.168.1.1 --username admin --key ~/.ssh/id_rsa
 4. When it detects a prompt character:
    - If '>' is detected, it automatically sends 'show version'
    - If '#' is detected, it automatically sends 'uname -a'
-5. If no recognized prompt is detected, it allows manual command input
-6. The session continues until the user types 'exit' or presses Ctrl+C
+5. If pagination is detected (e.g., "--More--", "Press Enter to continue"), it automatically sends the appropriate key to continue
+6. If no recognized prompt is detected, it allows manual command input
+7. The session continues until the user types 'exit' or presses Ctrl+C
+
+## Pagination Handling
+
+The script automatically handles common pagination prompts by sending the appropriate key to continue. The default pagination prompts and their corresponding keys are:
+
+```python
+self.pagination_prompts = {
+    '--More--': ' ',          # Space to continue
+    'More': ' ',              # Space to continue
+    '(y/n)': 'y',             # Yes to continue
+    '(Y/n)': 'y',             # Yes to continue
+    '(y/N)': 'y',             # Yes to continue
+    '(Y/N)': 'y',             # Yes to continue
+    'Press any key to continue': '\n',  # Enter to continue
+    'Press Enter to continue': '\n',    # Enter to continue
+    'q to quit': ' ',         # Space to continue, q would quit
+    'Q to quit': ' ',         # Space to continue, Q would quit
+}
+```
+
+You can customize this dictionary to add more pagination prompts as needed.
 
 ## Customization
 
@@ -79,6 +103,8 @@ self.prompt_actions = {
 }
 ```
 
+Similarly, you can customize the pagination handling by modifying the `pagination_prompts` dictionary.
+
 ## Error Handling
 
 The script includes comprehensive error handling for:
@@ -91,4 +117,3 @@ The script includes comprehensive error handling for:
 ## License
 
 This script is provided as-is under the MIT License.
-

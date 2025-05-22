@@ -51,6 +51,19 @@ class AutoSSHClient:
             '>': 'show version',
             '#': 'uname -a'
         }
+        # Pagination prompts and the key to send to continue
+        self.pagination_prompts = {
+            '--More--': ' ',  # Space to continue
+            'More': ' ',      # Space to continue
+            '(y/n)': 'y',     # Yes to continue
+            '(Y/n)': 'y',     # Yes to continue
+            '(y/N)': 'y',     # Yes to continue
+            '(Y/N)': 'y',     # Yes to continue
+            'Press any key to continue': '\n',  # Enter to continue
+            'Press Enter to continue': '\n',    # Enter to continue
+            'q to quit': ' ',  # Space to continue, q would quit
+            'Q to quit': ' ',  # Space to continue, Q would quit
+        }
     
     def connect(self):
         """Establish SSH connection using either password or key-based authentication."""
@@ -107,13 +120,31 @@ class AutoSSHClient:
         
         return False
     
-    def read_until_prompt(self, timeout=30):
+    def check_for_pagination(self, output):
+        """
+        Check if the output contains pagination prompts.
+        
+        Args:
+            output (str): The output text to check
+            
+        Returns:
+            tuple: (is_paginated, key_to_send) where is_paginated is a boolean
+                  indicating if pagination was detected and key_to_send is the
+                  key to send to continue (or None)
+        """
+        for prompt, key in self.pagination_prompts.items():
+            if prompt in output:
+                return True, key
+        return False, None
+    
+    def read_until_prompt(self, timeout=30, handle_pagination=True):
         """
         Read from the channel until a prompt character is detected or timeout.
         
         Args:
             timeout (int): Maximum time to wait for a prompt
-        
+            handle_pagination (bool): Whether to automatically handle pagination
+            
         Returns:
             tuple: (output, prompt_char) where output is the text received and
                   prompt_char is the detected prompt character (or None)
@@ -127,7 +158,17 @@ class AutoSSHClient:
                 chunk = self.channel.recv(self.buffer_size).decode('utf-8', errors='ignore')
                 output += chunk
                 
-                # Check for prompt characters
+                # Check for pagination prompts
+                if handle_pagination:
+                    is_paginated, key_to_send = self.check_for_pagination(output)
+                    if is_paginated:
+                        print(f"Pagination detected, sending '{key_to_send}' to continue...")
+                        self.channel.send(key_to_send)
+                        # Small delay to allow the device to process the pagination key
+                        time.sleep(0.5)
+                        continue
+                
+                # Check for command prompts
                 for char in self.prompt_actions.keys():
                     if output.strip().endswith(char):
                         prompt_char = char
@@ -138,16 +179,29 @@ class AutoSSHClient:
         
         return output, prompt_char
     
-    def send_command(self, command):
+    def send_command(self, command, timeout=30, handle_pagination=True):
         """
-        Send a command to the SSH channel.
+        Send a command to the SSH channel and read the output.
         
         Args:
             command (str): Command to send
+            timeout (int): Maximum time to wait for output
+            handle_pagination (bool): Whether to automatically handle pagination
+            
+        Returns:
+            str: The command output
         """
-        if self.channel:
-            self.channel.send(command + '\n')
-            print(f"Sent command: {command}")
+        if not self.channel:
+            print("Error: Not connected. Please connect first.")
+            return ""
+        
+        # Send the command
+        self.channel.send(command + '\n')
+        print(f"Sent command: {command}")
+        
+        # Read the output
+        output, _ = self.read_until_prompt(timeout=timeout, handle_pagination=handle_pagination)
+        return output
     
     def interact(self):
         """
@@ -166,11 +220,11 @@ class AutoSSHClient:
             while True:
                 if prompt in self.prompt_actions:
                     command = self.prompt_actions[prompt]
-                    self.send_command(command)
-                    
-                    # Read the command output and next prompt
-                    output, prompt = self.read_until_prompt()
+                    output = self.send_command(command)
                     print(output)
+                    
+                    # Get the next prompt
+                    _, prompt = self.read_until_prompt(timeout=5, handle_pagination=False)
                 else:
                     # If no recognized prompt is found, wait for user input
                     user_input = input("Command (or 'exit' to quit): ")
@@ -178,9 +232,11 @@ class AutoSSHClient:
                     if user_input.lower() in ('exit', 'quit'):
                         break
                     
-                    self.send_command(user_input)
-                    output, prompt = self.read_until_prompt()
+                    output = self.send_command(user_input)
                     print(output)
+                    
+                    # Get the next prompt
+                    _, prompt = self.read_until_prompt(timeout=5, handle_pagination=False)
         
         except KeyboardInterrupt:
             print("\nInterrupted by user. Exiting...")
@@ -207,6 +263,7 @@ def parse_arguments():
     parser.add_argument('--password', help='SSH password (optional if key is provided)')
     parser.add_argument('--key', help='Path to SSH private key file (optional if password is provided)')
     parser.add_argument('--timeout', type=int, default=10, help='Connection timeout in seconds (default: 10)')
+    parser.add_argument('--no-pagination', action='store_true', help='Disable automatic pagination handling')
     
     args = parser.parse_args()
     
@@ -236,4 +293,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
