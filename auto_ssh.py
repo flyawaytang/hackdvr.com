@@ -1,0 +1,239 @@
+#!/usr/bin/env python3
+"""
+Auto SSH Login CLI Interface
+
+This script provides an automated SSH login interface that supports both
+username/password and SSH private key authentication. It captures specific
+prompt characters and executes corresponding commands.
+
+Usage:
+    python auto_ssh.py --host HOST [--port PORT] [--username USERNAME] 
+                      [--password PASSWORD] [--key KEY_FILE]
+                      [--timeout TIMEOUT]
+
+Example:
+    python auto_ssh.py --host 192.168.1.1 --username admin --password secret
+    python auto_ssh.py --host 192.168.1.1 --username admin --key ~/.ssh/id_rsa
+"""
+
+import argparse
+import os
+import sys
+import time
+import socket
+import paramiko
+import re
+
+
+class AutoSSHClient:
+    def __init__(self, host, port=22, username=None, password=None, key_file=None, timeout=10):
+        """
+        Initialize the SSH client with connection parameters.
+        
+        Args:
+            host (str): Target host to connect to
+            port (int): SSH port (default: 22)
+            username (str): SSH username
+            password (str): SSH password (optional if key_file is provided)
+            key_file (str): Path to SSH private key file (optional if password is provided)
+            timeout (int): Connection timeout in seconds (default: 10)
+        """
+        self.host = host
+        self.port = port
+        self.username = username
+        self.password = password
+        self.key_file = key_file
+        self.timeout = timeout
+        self.client = None
+        self.channel = None
+        self.buffer_size = 1024
+        self.prompt_actions = {
+            '>': 'show version',
+            '#': 'uname -a'
+        }
+    
+    def connect(self):
+        """Establish SSH connection using either password or key-based authentication."""
+        try:
+            self.client = paramiko.SSHClient()
+            self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            
+            connect_kwargs = {
+                'hostname': self.host,
+                'port': self.port,
+                'username': self.username,
+                'timeout': self.timeout,
+            }
+            
+            # Use key file if provided
+            if self.key_file:
+                if os.path.exists(self.key_file):
+                    try:
+                        key = paramiko.RSAKey.from_private_key_file(self.key_file)
+                        connect_kwargs['pkey'] = key
+                    except paramiko.ssh_exception.PasswordRequiredException:
+                        # If key is password protected, prompt for password
+                        passphrase = input(f"Enter passphrase for key '{self.key_file}': ")
+                        key = paramiko.RSAKey.from_private_key_file(self.key_file, password=passphrase)
+                        connect_kwargs['pkey'] = key
+                else:
+                    print(f"Error: Key file '{self.key_file}' not found.")
+                    return False
+            # Use password if provided
+            elif self.password:
+                connect_kwargs['password'] = self.password
+            else:
+                print("Error: Either password or key file must be provided.")
+                return False
+            
+            print(f"Connecting to {self.host}:{self.port}...")
+            self.client.connect(**connect_kwargs)
+            
+            # Open an interactive shell channel
+            self.channel = self.client.invoke_shell()
+            self.channel.settimeout(self.timeout)
+            
+            print(f"Successfully connected to {self.host}")
+            return True
+            
+        except paramiko.AuthenticationException:
+            print("Authentication failed. Please check your credentials.")
+        except paramiko.SSHException as e:
+            print(f"SSH error: {str(e)}")
+        except socket.error as e:
+            print(f"Connection error: {str(e)}")
+        except Exception as e:
+            print(f"Error: {str(e)}")
+        
+        return False
+    
+    def read_until_prompt(self, timeout=30):
+        """
+        Read from the channel until a prompt character is detected or timeout.
+        
+        Args:
+            timeout (int): Maximum time to wait for a prompt
+        
+        Returns:
+            tuple: (output, prompt_char) where output is the text received and
+                  prompt_char is the detected prompt character (or None)
+        """
+        start_time = time.time()
+        output = ""
+        prompt_char = None
+        
+        while (time.time() - start_time) < timeout:
+            if self.channel.recv_ready():
+                chunk = self.channel.recv(self.buffer_size).decode('utf-8', errors='ignore')
+                output += chunk
+                
+                # Check for prompt characters
+                for char in self.prompt_actions.keys():
+                    if output.strip().endswith(char):
+                        prompt_char = char
+                        return output, prompt_char
+            
+            # Small delay to prevent CPU hogging
+            time.sleep(0.1)
+        
+        return output, prompt_char
+    
+    def send_command(self, command):
+        """
+        Send a command to the SSH channel.
+        
+        Args:
+            command (str): Command to send
+        """
+        if self.channel:
+            self.channel.send(command + '\n')
+            print(f"Sent command: {command}")
+    
+    def interact(self):
+        """
+        Main interaction loop that reads output and responds based on prompts.
+        """
+        if not self.channel:
+            print("Error: Not connected. Please connect first.")
+            return
+        
+        try:
+            # Initial read to capture login banner and initial prompt
+            output, prompt = self.read_until_prompt()
+            print(output)
+            
+            # Continue interaction until user interrupts
+            while True:
+                if prompt in self.prompt_actions:
+                    command = self.prompt_actions[prompt]
+                    self.send_command(command)
+                    
+                    # Read the command output and next prompt
+                    output, prompt = self.read_until_prompt()
+                    print(output)
+                else:
+                    # If no recognized prompt is found, wait for user input
+                    user_input = input("Command (or 'exit' to quit): ")
+                    
+                    if user_input.lower() in ('exit', 'quit'):
+                        break
+                    
+                    self.send_command(user_input)
+                    output, prompt = self.read_until_prompt()
+                    print(output)
+        
+        except KeyboardInterrupt:
+            print("\nInterrupted by user. Exiting...")
+        except Exception as e:
+            print(f"Error during interaction: {str(e)}")
+        finally:
+            self.disconnect()
+    
+    def disconnect(self):
+        """Close the SSH connection."""
+        if self.channel:
+            self.channel.close()
+        if self.client:
+            self.client.close()
+        print(f"Disconnected from {self.host}")
+
+
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description='Auto SSH Login CLI Interface')
+    parser.add_argument('--host', required=True, help='Target host to connect to')
+    parser.add_argument('--port', type=int, default=22, help='SSH port (default: 22)')
+    parser.add_argument('--username', required=True, help='SSH username')
+    parser.add_argument('--password', help='SSH password (optional if key is provided)')
+    parser.add_argument('--key', help='Path to SSH private key file (optional if password is provided)')
+    parser.add_argument('--timeout', type=int, default=10, help='Connection timeout in seconds (default: 10)')
+    
+    args = parser.parse_args()
+    
+    # Validate that either password or key is provided
+    if not args.password and not args.key:
+        parser.error("Either --password or --key must be provided")
+    
+    return args
+
+
+def main():
+    """Main function to run the auto SSH client."""
+    args = parse_arguments()
+    
+    ssh_client = AutoSSHClient(
+        host=args.host,
+        port=args.port,
+        username=args.username,
+        password=args.password,
+        key_file=args.key,
+        timeout=args.timeout
+    )
+    
+    if ssh_client.connect():
+        ssh_client.interact()
+
+
+if __name__ == "__main__":
+    main()
+
