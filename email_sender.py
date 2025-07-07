@@ -2,59 +2,71 @@
 # -*- coding: utf-8 -*-
 
 """
-Python 3 Email Sender with Authentication and Attachment Support
+Email Sender - A simple tool for sending emails with attachments
+
+This module provides a class for sending emails with attachments using SMTP.
+It supports both SSL and TLS encryption, as well as port 25 for standard SMTP.
 """
 
+import argparse
+import getpass
 import os
 import smtplib
-import argparse
+import sys
 from email import encoders
-from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
-from email.header import Header
-from pathlib import Path
-import getpass
-import sys
+from email.mime.text import MIMEText
+from email.utils import formataddr
 
 class EmailSender:
-    """
-    A class to handle email sending with authentication and attachments
-    """
-    
+    """A class for sending emails with attachments using SMTP"""
+
     def __init__(self, smtp_server, smtp_port, use_ssl=True):
         """
-        Initialize the EmailSender with SMTP server details
-        
+        Initialize the EmailSender with server details
+
         Args:
-            smtp_server (str): SMTP server address (e.g., smtp.gmail.com)
-            smtp_port (int): SMTP server port (e.g., 465 for SSL, 587 for TLS)
-            use_ssl (bool): Whether to use SSL connection (True) or TLS (False)
+            smtp_server (str): SMTP server address
+            smtp_port (int): SMTP server port
+            use_ssl (bool, optional): Whether to use SSL encryption. Defaults to True.
+                If False and port is 25 or 587, will attempt to use STARTTLS.
         """
         self.smtp_server = smtp_server
         self.smtp_port = smtp_port
         self.use_ssl = use_ssl
         self.server = None
+        self.username = None
         self.is_authenticated = False
-    
+
     def authenticate(self, username, password):
         """
         Authenticate with the SMTP server
-        
+
         Args:
-            username (str): Email username/address
-            password (str): Email password or app password
-            
+            username (str): Email address or username
+            password (str): Password or app password
+
         Returns:
-            bool: True if authentication successful, False otherwise
+            bool: True if authentication was successful, False otherwise
         """
         try:
-            # Create the appropriate server connection based on SSL/TLS
+            # Create the appropriate server connection
             if self.use_ssl:
                 self.server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port)
             else:
+                # For non-SSL connections (like port 25 or 587)
                 self.server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-                self.server.starttls()  # Upgrade to secure connection
+                
+                # Try to use STARTTLS if available (for security)
+                if self.smtp_port in [25, 587]:
+                    try:
+                        self.server.starttls()
+                        print("STARTTLS encryption enabled")
+                    except smtplib.SMTPNotSupportedError:
+                        print("Warning: STARTTLS not supported by server. Connection is not encrypted.")
+                    except Exception as e:
+                        print(f"Warning: Failed to enable STARTTLS: {str(e)}")
             
             # Login to the server
             self.server.login(username, password)
@@ -67,7 +79,7 @@ class EmailSender:
             print(f"Authentication failed: {str(e)}")
             self.is_authenticated = False
             return False
-    
+
     def create_message(self, to_addresses, subject, body, cc_addresses=None, 
                       bcc_addresses=None, attachments=None, html_body=False):
         """
@@ -206,90 +218,82 @@ class EmailSender:
 
 
 def main():
-    """Command line interface for the email sender"""
-    parser = argparse.ArgumentParser(description='Send emails with authentication and attachments')
-    
-    # Server settings
-    parser.add_argument('--server', required=True, help='SMTP server address (e.g., smtp.gmail.com)')
-    parser.add_argument('--port', type=int, required=True, help='SMTP server port (e.g., 465 for SSL, 587 for TLS)')
-    parser.add_argument('--use-tls', action='store_true', help='Use TLS instead of SSL')
-    
-    # Authentication
+    """Main function for command line usage"""
+    parser = argparse.ArgumentParser(description='Send emails with attachments')
+    parser.add_argument('--server', required=True, help='SMTP server address')
+    parser.add_argument('--port', required=True, type=int, help='SMTP server port')
+    parser.add_argument('--use-tls', action='store_true', help='Use TLS instead of SSL (for ports 25, 587)')
     parser.add_argument('--username', help='Email username/address')
-    
-    # Email content
-    parser.add_argument('--to', required=True, help='Recipient email address(es), comma-separated')
-    parser.add_argument('--cc', help='CC recipient(s), comma-separated')
-    parser.add_argument('--bcc', help='BCC recipient(s), comma-separated')
+    parser.add_argument('--to', required=True, help='Recipient email address(es), comma separated')
+    parser.add_argument('--cc', help='CC recipient(s), comma separated')
+    parser.add_argument('--bcc', help='BCC recipient(s), comma separated')
     parser.add_argument('--subject', required=True, help='Email subject')
-    parser.add_argument('--body', help='Email body content')
-    parser.add_argument('--body-file', help='File containing email body content')
-    parser.add_argument('--html', action='store_true', help='Body is HTML content')
-    
-    # Attachments
-    parser.add_argument('--attach', action='append', help='Path to attachment file (can be used multiple times)')
+    parser.add_argument('--body', help='Email body text')
+    parser.add_argument('--body-file', help='File containing email body')
+    parser.add_argument('--html', action='store_true', help='Treat body as HTML')
+    parser.add_argument('--attach', action='append', help='File to attach (can be used multiple times)')
     
     args = parser.parse_args()
     
-    # Get email body from file or argument
-    body = ""
+    # Validate body arguments
+    if not args.body and not args.body_file:
+        parser.error("Either --body or --body-file must be provided")
+    
+    if args.body and args.body_file:
+        parser.error("Cannot use both --body and --body-file")
+    
+    # Get username if not provided
+    username = args.username
+    if not username:
+        username = input("Email address: ")
+    
+    # Get password securely
+    password = getpass.getpass("Password: ")
+    
+    # Create the sender
+    sender = EmailSender(args.server, args.port, not args.use_tls)
+    
+    # Authenticate
+    if not sender.authenticate(username, password):
+        sys.exit(1)
+    
+    # Get body content
+    body = args.body
     if args.body_file:
         try:
             with open(args.body_file, 'r', encoding='utf-8') as f:
                 body = f.read()
         except Exception as e:
             print(f"Error reading body file: {str(e)}")
-            return 1
-    elif args.body:
-        body = args.body
-    else:
-        print("Email body must be provided either with --body or --body-file")
-        return 1
+            sys.exit(1)
     
-    # Get username if not provided
-    username = args.username
-    if not username:
-        username = input("Email username/address: ")
+    # Parse recipients
+    to_list = [addr.strip() for addr in args.to.split(',') if addr.strip()]
+    cc_list = []
+    if args.cc:
+        cc_list = [addr.strip() for addr in args.cc.split(',') if addr.strip()]
+    bcc_list = []
+    if args.bcc:
+        bcc_list = [addr.strip() for addr in args.bcc.split(',') if addr.strip()]
     
-    # Get password securely
-    password = getpass.getpass("Email password: ")
+    # Create message
+    message = sender.create_message(
+        to_addresses=to_list,
+        cc_addresses=cc_list,
+        bcc_addresses=bcc_list,
+        subject=args.subject,
+        body=body,
+        is_html=args.html,
+        attachments=args.attach
+    )
     
-    # Parse recipient lists
-    to_list = [addr.strip() for addr in args.to.split(',')]
-    cc_list = [addr.strip() for addr in args.cc.split(',')] if args.cc else None
-    bcc_list = [addr.strip() for addr in args.bcc.split(',')] if args.bcc else None
+    # Send the email
+    sender.send_email(message)
     
-    # Create email sender
-    sender = EmailSender(args.server, args.port, not args.use_tls)
+    # Close the connection
+    sender.close()
     
-    # Authenticate
-    if not sender.authenticate(username, password):
-        return 1
-    
-    # Create and send message
-    try:
-        message = sender.create_message(
-            to_list, 
-            args.subject, 
-            body, 
-            cc_list, 
-            None,  # BCC is handled separately
-            args.attach, 
-            args.html
-        )
-        
-        if not sender.send_email(message, bcc_list):
-            return 1
-            
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        return 1
-    finally:
-        sender.close()
-    
-    return 0
-
+    print("Email sent successfully!")
 
 if __name__ == "__main__":
-    sys.exit(main())
-
+    main()
