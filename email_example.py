@@ -9,13 +9,11 @@ from email_sender import EmailSender
 
 def gmail_example():
     """Example of sending email through Gmail"""
-    # For Gmail, you'll need to use an App Password if 2FA is enabled
-    # Create one at: https://myaccount.google.com/apppasswords
+    # Create the sender with SSL
+    sender = EmailSender('smtp.gmail.com', 465)
     
-    # Create the sender with Gmail's SMTP settings
-    sender = EmailSender('smtp.gmail.com', 465)  # Gmail uses port 465 for SSL
-    
-    # Authenticate - replace with your actual Gmail address and password/app password
+    # Authenticate - replace with your actual Gmail address and app password
+    # For Gmail with 2FA, you need to use an app password
     username = 'your.email@gmail.com'
     password = 'your-app-password'
     
@@ -23,14 +21,15 @@ def gmail_example():
         print("Authentication failed. Exiting.")
         return
     
-    # Create a message with an attachment
+    # Create a message
     message = sender.create_message(
         to_addresses=['recipient@example.com'],
-        subject='Test Email with Attachment',
-        body='This is a test email sent from Python with an attachment.',
-        cc_addresses=['cc-recipient@example.com'],
-        attachments=['./document.pdf'],  # Replace with actual file path
-        html_body=False
+        subject='Test Email from Python',
+        body='This is a test email sent from Python using the EmailSender class.',
+        cc_addresses=['cc@example.com'],
+        bcc_addresses=['bcc@example.com'],
+        attachments=['./document.pdf'],
+        is_html=False
     )
     
     # Send the email
@@ -41,41 +40,41 @@ def gmail_example():
 
 def qq_mail_example():
     """Example of sending email through QQ Mail"""
-    # For QQ Mail, you'll need to generate an authorization code
-    # Enable SMTP in QQ Mail settings and get the code
+    # Create the sender with SSL
+    sender = EmailSender('smtp.qq.com', 465)
     
-    # Create the sender with QQ Mail's SMTP settings
-    sender = EmailSender('smtp.qq.com', 465)  # QQ Mail uses port 465 for SSL
-    
-    # Authenticate - replace with your actual QQ Mail address and authorization code
+    # Authenticate - replace with your actual QQ email and authorization code
+    # You need to enable SMTP in QQ Mail settings and get an authorization code
     username = 'your-qq-number@qq.com'
-    password = 'your-authorization-code'  # Not your QQ password!
+    password = 'your-authorization-code'
     
     if not sender.authenticate(username, password):
         print("Authentication failed. Exiting.")
         return
     
-    # Create a message with HTML content
+    # Create HTML content
     html_body = """
     <html>
-      <body>
+    <head></head>
+    <body>
         <h1>HTML Email Test</h1>
-        <p>This is a <b>test email</b> with <span style="color: blue;">HTML formatting</span>.</p>
-        <p>Here's a list:</p>
+        <p>This is an <b>HTML</b> email sent from Python using the EmailSender class.</p>
+        <p>It supports:</p>
         <ul>
-          <li>Item 1</li>
-          <li>Item 2</li>
-          <li>Item 3</li>
+            <li>Formatted text</li>
+            <li>Links: <a href="https://www.example.com">Example</a></li>
+            <li>And more...</li>
         </ul>
-      </body>
+    </body>
     </html>
     """
     
+    # Create a message with HTML content
     message = sender.create_message(
         to_addresses=['recipient@example.com'],
         subject='HTML Email Test',
         body=html_body,
-        html_body=True  # Specify that we're using HTML content
+        is_html=True
     )
     
     # Send the email
@@ -86,12 +85,12 @@ def qq_mail_example():
 
 def multiple_attachments_example():
     """Example of sending email with multiple attachments"""
-    # Create the sender (using 163 Mail as an example)
-    sender = EmailSender('smtp.163.com', 465)
+    # Create the sender with SSL
+    sender = EmailSender('smtp.gmail.com', 465)
     
-    # Authenticate - replace with your actual 163 Mail address and password
-    username = 'your-username@163.com'
-    password = 'your-password-or-authorization-code'
+    # Authenticate
+    username = 'your.email@gmail.com'
+    password = 'your-app-password'
     
     if not sender.authenticate(username, password):
         print("Authentication failed. Exiting.")
@@ -99,11 +98,11 @@ def multiple_attachments_example():
     
     # Create a message with multiple attachments
     message = sender.create_message(
-        to_addresses=['recipient1@example.com', 'recipient2@example.com'],
+        to_addresses=['recipient@example.com'],
         subject='Multiple Attachments Test',
         body='This email contains multiple attachments.',
         attachments=[
-            './document1.pdf',  # Replace with actual file paths
+            './document1.pdf',
             './image.jpg',
             './spreadsheet.xlsx'
         ]
