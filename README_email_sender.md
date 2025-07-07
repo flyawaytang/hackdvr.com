@@ -11,6 +11,7 @@
 ## 功能特点
 
 - 支持 SSL 和 TLS 加密连接
+- 支持标准端口 25 进行邮件认证和发送
 - 支持多种邮件服务提供商 (Gmail, QQ邮箱, 163邮箱等)
 - 灵活的 API 设计，易于集成到其他项目中
 - 详细的错误处理和日志输出
@@ -31,6 +32,15 @@
 python email_sender.py --server smtp.gmail.com --port 465 --username your.email@gmail.com \
     --to recipient@example.com --subject "测试邮件" \
     --body "这是一封测试邮件。" --attach document.pdf
+```
+
+### 使用端口 25 发送邮件
+
+```bash
+# 使用端口 25 并启用 STARTTLS
+python email_sender.py --server smtp.example.com --port 25 --use-tls \
+    --username your.email@example.com --to recipient@example.com \
+    --subject "端口 25 测试" --body "这是通过端口 25 发送的邮件。"
 ```
 
 ### 作为 Python 库
@@ -56,6 +66,23 @@ message = sender.create_message(
 sender.send_email(message)
 
 # 关闭连接
+sender.close()
+```
+
+### 使用端口 25 (Python 库方式)
+
+```python
+# 使用端口 25 并启用 STARTTLS
+sender = EmailSender('smtp.example.com', 25, use_ssl=False)  # 端口 25 通常使用 STARTTLS
+sender.authenticate('your.email@example.com', 'your-password')
+
+# 创建并发送邮件
+message = sender.create_message(
+    to_addresses='recipient@example.com',
+    subject='端口 25 测试',
+    body='这是通过端口 25 发送的邮件。'
+)
+sender.send_email(message)
 sender.close()
 ```
 
@@ -106,13 +133,16 @@ sender.close()
 1. Gmail 发送示例
 2. QQ邮箱发送示例
 3. 发送带多个附件的邮件示例
-4. 命令行使用示例
+4. 使用端口 25 发送邮件示例
+5. 命令行使用示例
 
 ## 注意事项
 
 1. 对于 Gmail，如果启用了两步验证，需要使用应用专用密码而非账户密码
 2. 对于 QQ 邮箱和 163 邮箱，需要在邮箱设置中开启 SMTP 服务并获取授权码
 3. 某些 ISP 可能会封锁特定的 SMTP 端口，特别是 25 端口
+   - 如果端口 25 被封锁，请尝试使用端口 465 (SSL) 或 587 (TLS)
+   - 企业网络环境可能允许端口 25 通信
 4. 密码在命令行中不会显示，会安全地提示输入
 5. 附件文件必须存在且可读，否则会跳过并显示警告
 
