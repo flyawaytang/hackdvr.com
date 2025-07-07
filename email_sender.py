@@ -18,6 +18,7 @@ from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
+from email.header import Header  # 添加导入Header类
 
 class EmailSender:
     """A class for sending emails with attachments using SMTP"""
@@ -81,7 +82,7 @@ class EmailSender:
             return False
 
     def create_message(self, to_addresses, subject, body, cc_addresses=None, 
-                      bcc_addresses=None, attachments=None, html_body=False):
+                      bcc_addresses=None, attachments=None, is_html=False):
         """
         Create an email message with optional attachments
         
@@ -92,10 +93,10 @@ class EmailSender:
             cc_addresses (str or list, optional): CC recipient(s)
             bcc_addresses (str or list, optional): BCC recipient(s)
             attachments (str or list, optional): Path(s) to attachment file(s)
-            html_body (bool, optional): Whether the body is HTML (default: False)
+            is_html (bool, optional): Whether body is HTML content
             
         Returns:
-            MIMEMultipart: The constructed email message
+            MIMEMultipart: The created email message object
         """
         if not self.is_authenticated:
             raise ValueError("You must authenticate before creating a message")
@@ -121,7 +122,7 @@ class EmailSender:
             message['Cc'] = ', '.join(cc_addresses)
             
         # Add body
-        if html_body:
+        if is_html:
             message.attach(MIMEText(body, 'html', 'utf-8'))
         else:
             message.attach(MIMEText(body, 'plain', 'utf-8'))
