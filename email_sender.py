@@ -153,7 +153,14 @@ class EmailSender:
         
         # Create message container
         message = MIMEMultipart()
-        message['From'] = formataddr((str(Header(self.username, 'utf-8')), self.username))
+        
+        # Set From header - handle case when username is None (no-auth mode)
+        if self.username:
+            message['From'] = formataddr((str(Header(self.username, 'utf-8')), self.username))
+        else:
+            # Use a generic sender name when username is not available
+            message['From'] = formataddr((str(Header('Email Sender', 'utf-8')), 'noreply@localhost'))
+            
         message['To'] = ', '.join(to_addresses)
         message['Subject'] = Header(subject, 'utf-8')
         
@@ -279,9 +286,15 @@ class EmailSender:
                     bcc_addresses = [bcc_addresses]
                 recipients.extend(bcc_addresses)
             
+            # Get sender address
+            from_addr = message['From']
+            if '<' in from_addr:
+                # Extract email from "Name <email>" format
+                from_addr = from_addr.split('<')[1].split('>')[0]
+            
             # Send the email
             self.server.sendmail(
-                message['From'],
+                from_addr,
                 recipients,
                 message.as_string()
             )
