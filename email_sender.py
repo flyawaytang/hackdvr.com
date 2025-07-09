@@ -18,7 +18,14 @@ from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
-from email.header import Header  # 添加导入Header类
+from email.header import Header
+
+# Import compression utilities if available
+try:
+    from compression_utils import create_archive
+    COMPRESSION_AVAILABLE = True
+except ImportError:
+    COMPRESSION_AVAILABLE = False
 
 class EmailSender:
     """A class for sending emails with attachments using SMTP"""
@@ -108,7 +115,8 @@ class EmailSender:
             return False
 
     def create_message(self, to_addresses, subject, body, cc_addresses=None, 
-                      bcc_addresses=None, attachments=None, is_html=False):
+                      bcc_addresses=None, attachments=None, is_html=False,
+                      compress_attachments=None):
         """
         Create an email message with optional attachments
         
@@ -120,6 +128,12 @@ class EmailSender:
             bcc_addresses (str or list, optional): BCC recipient(s)
             attachments (str or list, optional): Path(s) to attachment file(s)
             is_html (bool, optional): Whether body is HTML content
+            compress_attachments (dict, optional): Options for compressing attachments
+                Format: {
+                    'archive_type': 'zip'|'tar'|'tar.gz'|'tar.bz2',
+                    'archive_name': 'filename.zip',  # Optional, default is 'attachments.{ext}'
+                    'compression_level': 6,  # Optional, for zip only (0-9)
+                }
             
         Returns:
             MIMEMultipart: The created email message object
@@ -153,41 +167,84 @@ class EmailSender:
         else:
             message.attach(MIMEText(body, 'plain', 'utf-8'))
         
-        # Add attachments if provided
+        # Handle attachments
         if attachments:
-            for attachment_path in attachments:
+            # Check if compression is requested and available
+            if compress_attachments and COMPRESSION_AVAILABLE:
                 try:
-                    # Check if file exists
-                    if not os.path.isfile(attachment_path):
-                        print(f"Warning: Attachment file not found: {attachment_path}")
-                        continue
+                    # Set default archive name if not provided
+                    archive_name = compress_attachments.get('archive_name')
+                    if not archive_name:
+                        ext = compress_attachments['archive_type']
+                        archive_name = f"attachments.{ext}"
                     
-                    # Get filename from path
-                    filename = os.path.basename(attachment_path)
+                    # Create temporary archive
+                    temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'temp')
+                    os.makedirs(temp_dir, exist_ok=True)
+                    archive_path = os.path.join(temp_dir, archive_name)
                     
-                    # Open file in binary mode
-                    with open(attachment_path, 'rb') as attachment_file:
-                        # Create MIME attachment part
-                        part = MIMEBase('application', 'octet-stream')
-                        part.set_payload(attachment_file.read())
-                    
-                    # Encode file in ASCII characters to send by email
-                    encoders.encode_base64(part)
-                    
-                    # Add header as key/value pair to attachment part
-                    part.add_header(
-                        'Content-Disposition',
-                        f'attachment; filename="{filename}"',
+                    # Create the archive
+                    archive_path = create_archive(
+                        attachments,
+                        archive_path,
+                        compress_attachments.get('archive_type', 'zip'),
+                        compress_attachments.get('compression_level', 6)
                     )
                     
-                    # Add attachment to message
-                    message.attach(part)
-                    print(f"Added attachment: {filename}")
+                    # Add the archive as a single attachment
+                    self._add_attachment_to_message(message, archive_path)
+                    print(f"Added compressed archive: {archive_name}")
                     
                 except Exception as e:
-                    print(f"Error adding attachment {attachment_path}: {str(e)}")
+                    print(f"Error compressing attachments: {str(e)}")
+                    print("Falling back to individual attachments")
+                    for attachment_path in attachments:
+                        self._add_attachment_to_message(message, attachment_path)
+            else:
+                # Add attachments individually
+                for attachment_path in attachments:
+                    self._add_attachment_to_message(message, attachment_path)
         
         return message
+    
+    def _add_attachment_to_message(self, message, attachment_path):
+        """
+        Add a single attachment to the message
+        
+        Args:
+            message (MIMEMultipart): The email message
+            attachment_path (str): Path to the attachment file
+        """
+        try:
+            # Check if file exists
+            if not os.path.isfile(attachment_path):
+                print(f"Warning: Attachment file not found: {attachment_path}")
+                return
+            
+            # Get filename from path
+            filename = os.path.basename(attachment_path)
+            
+            # Open file in binary mode
+            with open(attachment_path, 'rb') as attachment_file:
+                # Create MIME attachment part
+                part = MIMEBase('application', 'octet-stream')
+                part.set_payload(attachment_file.read())
+            
+            # Encode file in ASCII characters to send by email
+            encoders.encode_base64(part)
+            
+            # Add header as key/value pair to attachment part
+            part.add_header(
+                'Content-Disposition',
+                f'attachment; filename="{filename}"',
+            )
+            
+            # Add attachment to message
+            message.attach(part)
+            print(f"Added attachment: {filename}")
+            
+        except Exception as e:
+            print(f"Error adding attachment {attachment_path}: {str(e)}")
     
     def send_email(self, message, bcc_addresses=None):
         """
@@ -259,6 +316,8 @@ def main():
     parser.add_argument('--body-file', help='File containing email body')
     parser.add_argument('--html', action='store_true', help='Treat body as HTML')
     parser.add_argument('--attach', action='append', help='File to attach (can be used multiple times)')
+    parser.add_argument('--compress', choices=['zip', 'tar', 'tar.gz', 'tar.bz2'], 
+                        help='Compress attachments into a single archive')
     
     args = parser.parse_args()
     
@@ -310,6 +369,18 @@ def main():
     if args.bcc:
         bcc_list = [addr.strip() for addr in args.bcc.split(',') if addr.strip()]
     
+    # Handle compression options
+    compress_attachments = None
+    if args.compress and args.attach:
+        if not COMPRESSION_AVAILABLE:
+            print("Warning: Compression requested but compression_utils module not available.")
+            print("Attachments will be sent individually without compression.")
+        else:
+            compress_attachments = {
+                'archive_type': args.compress,
+                'archive_name': f"attachments.{args.compress}"
+            }
+    
     # Create message
     message = sender.create_message(
         to_addresses=to_list,
@@ -318,7 +389,8 @@ def main():
         subject=args.subject,
         body=body,
         is_html=args.html,
-        attachments=args.attach
+        attachments=args.attach,
+        compress_attachments=compress_attachments
     )
     
     # Send the email

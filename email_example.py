@@ -163,6 +163,78 @@ def port25_no_auth_example():
     # Close the connection
     sender.close()
 
+def compression_example():
+    """Example of sending email with compressed attachments"""
+    # Create the sender with SSL
+    sender = EmailSender('smtp.gmail.com', 465)
+    
+    # Authenticate
+    username = 'your.email@gmail.com'
+    password = 'your-app-password'
+    
+    if not sender.authenticate(username, password):
+        print("Authentication failed. Exiting.")
+        return
+    
+    # Create a message with compressed attachments
+    message = sender.create_message(
+        to_addresses=['recipient@example.com'],
+        subject='Compressed Attachments Test',
+        body='This email contains multiple files compressed into a single ZIP archive.',
+        attachments=[
+            './document1.pdf',
+            './image.jpg',
+            './spreadsheet.xlsx',
+            './report.docx'
+        ],
+        compress_attachments={
+            'archive_type': 'zip',
+            'archive_name': 'all_documents.zip',
+            'compression_level': 9  # Maximum compression
+        }
+    )
+    
+    # Send the email
+    sender.send_email(message)
+    
+    # Close the connection
+    sender.close()
+
+def tar_gz_example():
+    """Example of sending email with tar.gz compressed attachments"""
+    # Create the sender with SSL
+    sender = EmailSender('smtp.gmail.com', 465)
+    
+    # Authenticate
+    username = 'your.email@gmail.com'
+    password = 'your-app-password'
+    
+    if not sender.authenticate(username, password):
+        print("Authentication failed. Exiting.")
+        return
+    
+    # Create a message with compressed attachments
+    message = sender.create_message(
+        to_addresses=['recipient@example.com'],
+        subject='TAR.GZ Compressed Attachments',
+        body='This email contains multiple files compressed into a single TAR.GZ archive.',
+        attachments=[
+            './logs/',  # A directory
+            './config.ini',
+            './data.csv'
+        ],
+        compress_attachments={
+            'archive_type': 'tar.gz',
+            'archive_name': 'project_files.tar.gz'
+        }
+    )
+    
+    # Send the email
+    sender.send_email(message)
+    
+    # Close the connection
+    sender.close()
+
 def command_line_examples():
     """Examples of command line usage"""
     print("Example 1: Send email with Gmail")
@@ -187,6 +259,16 @@ def command_line_examples():
     print("python email_sender.py --server smtp.example.com --port 25 --use-tls --no-auth "
           "--to recipient@example.com --subject 'No Auth Test' "
           "--body 'This is a test email without authentication.'")
+          
+    print("\nExample 6: Send email with compressed attachments (ZIP)")
+    print("python email_sender.py --server smtp.gmail.com --port 465 --username your.email@gmail.com "
+          "--to recipient@example.com --subject 'Compressed Files' --body 'See attached ZIP file.' "
+          "--attach ./document.pdf --attach ./image.jpg --attach ./data.csv --compress zip")
+    
+    print("\nExample 7: Send email with compressed attachments (TAR.GZ)")
+    print("python email_sender.py --server smtp.gmail.com --port 465 --username your.email@gmail.com "
+          "--to recipient@example.com --subject 'Compressed Files' --body 'See attached TAR.GZ file.' "
+          "--attach ./logs/ --attach ./config.ini --compress tar.gz")
 
 if __name__ == "__main__":
     # Uncomment the example you want to run
@@ -195,5 +277,7 @@ if __name__ == "__main__":
     # multiple_attachments_example()
     # port25_example()
     # port25_no_auth_example()
+    # compression_example()
+    # tar_gz_example()
     command_line_examples()
 

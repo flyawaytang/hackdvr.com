@@ -4,15 +4,16 @@
 
 - 支持SSL和TLS加密连接
 - 支持端口25、465和587
-- 支持可选的身份验证（某些服务器不需要身份验证）
+- 支持可选的身份验证（某些服务器不需要认证）
 - 支持HTML内容
 - 支持多个附件
+- 支持附件压缩（ZIP、TAR、TAR.GZ、TAR.BZ2）
 - 支持抄送(CC)和密送(BCC)
 - 命令行界面和Python库两种使用方式
 
 ## 安装
 
-直接下载`email_sender.py`文件到您的项目中即可使用。
+直接下载`email_sender.py`和`compression_utils.py`文件到您的项目中即可使用。
 
 ## 使用方法
 
@@ -108,6 +109,46 @@ message = sender.create_message(
 sender.send_email(message)
 ```
 
+#### 使用压缩附件
+
+```python
+# 使用ZIP压缩多个附件
+message = sender.create_message(
+    to_addresses='recipient@example.com',
+    subject='压缩附件测试',
+    body='这封邮件包含一个ZIP压缩包，里面有多个文件。',
+    attachments=[
+        './document1.pdf',
+        './image.jpg',
+        './spreadsheet.xlsx',
+        './report.docx'
+    ],
+    compress_attachments={
+        'archive_type': 'zip',
+        'archive_name': 'all_documents.zip',
+        'compression_level': 9  # 最大压缩率
+    }
+)
+```
+
+```python
+# 使用TAR.GZ压缩目录和文件
+message = sender.create_message(
+    to_addresses='recipient@example.com',
+    subject='TAR.GZ压缩测试',
+    body='这封邮件包含一个TAR.GZ压缩包。',
+    attachments=[
+        './logs/',  # 一个目录
+        './config.ini',
+        './data.csv'
+    ],
+    compress_attachments={
+        'archive_type': 'tar.gz',
+        'archive_name': 'project_files.tar.gz'
+    }
+)
+```
+
 ### 作为命令行工具使用
 
 #### 基本用法
@@ -151,6 +192,26 @@ python email_sender.py --server smtp.example.com --port 25 --use-tls --no-auth \
     --body "这是通过不需要认证的服务器发送的邮件。"
 ```
 
+#### 使用压缩附件
+
+```bash
+# 使用ZIP压缩多个附件
+python email_sender.py --server smtp.gmail.com --port 465 \
+    --username your.email@gmail.com --to recipient@example.com \
+    --subject "压缩附件测试" --body "请查看ZIP压缩包。" \
+    --attach ./document.pdf --attach ./image.jpg --attach ./data.csv \
+    --compress zip
+```
+
+```bash
+# 使用TAR.GZ压缩多个附件
+python email_sender.py --server smtp.gmail.com --port 465 \
+    --username your.email@gmail.com --to recipient@example.com \
+    --subject "TAR.GZ压缩测试" --body "请查看TAR.GZ压缩包。" \
+    --attach ./logs/ --attach ./config.ini \
+    --compress tar.gz
+```
+
 ## 命令行参数
 
 ```
@@ -167,6 +228,7 @@ python email_sender.py --server smtp.example.com --port 25 --use-tls --no-auth \
 --body-file 包含邮件正文的文件
 --html 将正文视为HTML内容
 --attach 要附加的文件（可多次使用）
+--compress 压缩附件的格式（zip、tar、tar.gz、tar.bz2）
 ```
 
 ## 安全注意事项
