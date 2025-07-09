@@ -1,148 +1,205 @@
-# Python 邮件发送工具
+# Python Email Sender
 
-这是一个功能完整的 Python 3 邮件发送工具，支持：
+一个简单但功能强大的Python邮件发送工具，支持以下功能：
 
-- SMTP 服务器认证
-- 纯文本和 HTML 邮件格式
-- 添加多个附件
-- 支持抄送 (CC) 和密送 (BCC)
-- 命令行界面和 Python 类库两种使用方式
-
-## 功能特点
-
-- 支持 SSL 和 TLS 加密连接
-- 支持标准端口 25 进行邮件认证和发送
-- 支持多种邮件服务提供商 (Gmail, QQ邮箱, 163邮箱等)
-- 灵活的 API 设计，易于集成到其他项目中
-- 详细的错误处理和日志输出
-- 支持中文主题和内容
+- 支持SSL和TLS加密连接
+- 支持端口25、465和587
+- 支持可选的身份验证（某些服务器不需要身份验证）
+- 支持HTML内容
+- 支持多个附件
+- 支持抄送(CC)和密送(BCC)
+- 命令行界面和Python库两种使用方式
 
 ## 安装
 
-此工具只使用 Python 标准库，无需安装额外依赖。
-
-要求：
-- Python 3.6 或更高版本
+直接下载`email_sender.py`文件到您的项目中即可使用。
 
 ## 使用方法
 
-### 作为命令行工具
+### 作为Python库使用
 
-```bash
-python email_sender.py --server smtp.gmail.com --port 465 --username your.email@gmail.com \
-    --to recipient@example.com --subject "测试邮件" \
-    --body "这是一封测试邮件。" --attach document.pdf
-```
-
-### 使用端口 25 发送邮件
-
-```bash
-# 使用端口 25 并启用 STARTTLS
-python email_sender.py --server smtp.example.com --port 25 --use-tls \
-    --username your.email@example.com --to recipient@example.com \
-    --subject "端口 25 测试" --body "这是通过端口 25 发送的邮件。"
-```
-
-### 作为 Python 库
+#### 基本用法
 
 ```python
 from email_sender import EmailSender
 
-# 创建发送器实例
-sender = EmailSender('smtp.gmail.com', 465)  # 使用 SSL
+# 创建发送器
+sender = EmailSender('smtp.example.com', 465)  # 使用SSL
 
 # 认证
-sender.authenticate('your.email@gmail.com', 'your-password-or-app-password')
+sender.authenticate('your.email@example.com', 'your-password')
 
-# 创建邮件
+# 创建并发送邮件
 message = sender.create_message(
     to_addresses='recipient@example.com',
     subject='测试邮件',
-    body='这是一封测试邮件，带有附件。',
-    attachments=['./document.pdf']
+    body='这是一封测试邮件。'
 )
-
-# 发送邮件
 sender.send_email(message)
 
 # 关闭连接
 sender.close()
 ```
 
-### 使用端口 25 (Python 库方式)
+#### 使用HTML内容
 
 ```python
-# 使用端口 25 并启用 STARTTLS
-sender = EmailSender('smtp.example.com', 25, use_ssl=False)  # 端口 25 通常使用 STARTTLS
+html_body = """
+<html>
+<body>
+    <h1>HTML邮件测试</h1>
+    <p>这是一封<b>HTML格式</b>的邮件。</p>
+</body>
+</html>
+"""
+
+message = sender.create_message(
+    to_addresses='recipient@example.com',
+    subject='HTML测试',
+    body=html_body,
+    is_html=True  # 指定使用HTML内容
+)
+```
+
+#### 添加附件
+
+```python
+message = sender.create_message(
+    to_addresses='recipient@example.com',
+    subject='附件测试',
+    body='请查看附件。',
+    attachments=[
+        './document.pdf',
+        './image.jpg',
+        './spreadsheet.xlsx'
+    ]
+)
+```
+
+#### 使用端口25（STARTTLS）
+
+```python
+# 使用端口25并启用STARTTLS
+sender = EmailSender('smtp.example.com', 25, use_ssl=False)
 sender.authenticate('your.email@example.com', 'your-password')
 
 # 创建并发送邮件
 message = sender.create_message(
     to_addresses='recipient@example.com',
-    subject='端口 25 测试',
-    body='这是通过端口 25 发送的邮件。'
+    subject='端口25测试',
+    body='这是通过端口25发送的邮件。'
 )
 sender.send_email(message)
-sender.close()
 ```
 
-## 常见邮件服务商设置
+#### 不需要认证的服务器
 
-### Gmail
+```python
+# 连接到不需要认证的SMTP服务器
+sender = EmailSender('smtp.example.com', 25, use_ssl=False)
+sender.connect(require_auth=False)  # 指定不需要认证
 
-- SMTP 服务器: `smtp.gmail.com`
-- SSL 端口: `465`
-- TLS 端口: `587`
-- 注意: 如果启用了两步验证，需要使用应用专用密码
+# 创建并发送邮件
+message = sender.create_message(
+    to_addresses='recipient@example.com',
+    subject='无认证测试',
+    body='这是通过不需要认证的服务器发送的邮件。'
+)
+sender.send_email(message)
+```
 
-### QQ 邮箱
+### 作为命令行工具使用
 
-- SMTP 服务器: `smtp.qq.com`
-- SSL 端口: `465`
-- TLS 端口: `587`
-- 注意: 需要在 QQ 邮箱设置中开启 SMTP 服务并获取授权码
+#### 基本用法
 
-### 163 邮箱
+```bash
+python email_sender.py --server smtp.gmail.com --port 465 \
+    --username your.email@gmail.com --to recipient@example.com \
+    --subject "测试邮件" --body "这是一封测试邮件。"
+```
 
-- SMTP 服务器: `smtp.163.com`
-- SSL 端口: `465`
-- TLS 端口: `25` (部分 ISP 可能会封锁此端口)
-- 注意: 需要在 163 邮箱设置中开启 SMTP 服务并获取授权码
+#### 使用HTML内容
+
+```bash
+python email_sender.py --server smtp.gmail.com --port 465 \
+    --username your.email@gmail.com --to recipient@example.com \
+    --subject "HTML测试" --body "<h1>你好</h1><p>这是HTML内容。</p>" --html
+```
+
+#### 添加附件
+
+```bash
+python email_sender.py --server smtp.gmail.com --port 465 \
+    --username your.email@gmail.com --to recipient@example.com \
+    --subject "附件测试" --body "请查看附件。" \
+    --attach ./document.pdf --attach ./image.jpg
+```
+
+#### 使用端口25（STARTTLS）
+
+```bash
+python email_sender.py --server smtp.example.com --port 25 --use-tls \
+    --username your.email@example.com --to recipient@example.com \
+    --subject "端口25测试" --body "这是通过端口25发送的邮件。"
+```
+
+#### 不需要认证的服务器
+
+```bash
+python email_sender.py --server smtp.example.com --port 25 --use-tls --no-auth \
+    --to recipient@example.com --subject "无认证测试" \
+    --body "这是通过不需要认证的服务器发送的邮件。"
+```
 
 ## 命令行参数
 
 ```
---server SMTP服务器地址 (必需)
---port SMTP服务器端口 (必需)
---use-tls 使用TLS而非SSL (可选)
---username 邮箱用户名/地址 (可选，未提供时会提示输入)
---to 收件人邮箱地址，多个地址用逗号分隔 (必需)
---cc 抄送地址，多个地址用逗号分隔 (可选)
---bcc 密送地址，多个地址用逗号分隔 (可选)
---subject 邮件主题 (必需)
---body 邮件正文内容 (与--body-file二选一)
---body-file 包含邮件正文的文件路径 (与--body二选一)
---html 指定正文为HTML格式 (可选)
---attach 附件文件路径，可多次使用添加多个附件 (可选)
+--server SMTP服务器地址
+--port SMTP服务器端口
+--use-tls 使用TLS而不是SSL（适用于端口25、587）
+--no-auth 跳过认证（适用于不需要认证的服务器）
+--username 邮箱用户名/地址
+--to 收件人邮箱地址，多个地址用逗号分隔
+--cc 抄送收件人，多个地址用逗号分隔
+--bcc 密送收件人，多个地址用逗号分隔
+--subject 邮件主题
+--body 邮件正文内容
+--body-file 包含邮件正文的文件
+--html 将正文视为HTML内容
+--attach 要附加的文件（可多次使用）
 ```
 
-## 示例
+## 安全注意事项
 
-查看 `email_example.py` 文件获取更多使用示例，包括：
+1. 端口25是标准SMTP端口，但许多ISP会封锁此端口以防止垃圾邮件
+2. 强烈建议使用STARTTLS或SSL加密连接，以保护您的凭据和邮件内容
+3. 如果您的ISP封锁了端口25，可以尝试使用端口465（SSL）或587（TLS）
+4. 企业网络环境通常允许端口25通信
+5. 使用不需要认证的服务器时要特别小心，这可能会被滥用于发送垃圾邮件
 
-1. Gmail 发送示例
-2. QQ邮箱发送示例
-3. 发送带多个附件的邮件示例
-4. 使用端口 25 发送邮件示例
-5. 命令行使用示例
+## 常见邮件服务器设置
 
-## 注意事项
+### Gmail
+- 服务器: smtp.gmail.com
+- 端口: 465 (SSL) 或 587 (TLS)
+- 认证: 必需
+- 注意: 如果启用了两步验证，需要使用应用专用密码
 
-1. 对于 Gmail，如果启用了两步验证，需要使用应用专用密码而非账户密码
-2. 对于 QQ 邮箱和 163 邮箱，需要在邮箱设置中开启 SMTP 服务并获取授权码
-3. 某些 ISP 可能会封锁特定的 SMTP 端口，特别是 25 端口
-   - 如果端口 25 被封锁，请尝试使用端口 465 (SSL) 或 587 (TLS)
-   - 企业网络环境可能允许端口 25 通信
-4. 密码在命令行中不会显示，会安全地提示输入
-5. 附件文件必须存在且可读，否则会跳过并显示警告
+### QQ邮箱
+- 服务器: smtp.qq.com
+- 端口: 465 (SSL) 或 587 (TLS)
+- 认证: 必需
+- 注意: 需要在QQ邮箱设置中启用SMTP并获取授权码
+
+### 163邮箱
+- 服务器: smtp.163.com
+- 端口: 465 (SSL) 或 25 (STARTTLS)
+- 认证: 必需
+- 注意: 需要在163邮箱设置中启用SMTP并获取授权码
+
+### 企业邮件服务器
+- 服务器: 根据企业设置
+- 端口: 通常为25、465或587
+- 认证: 根据企业设置，可能需要也可能不需要
+- 注意: 请咨询您的IT部门获取正确的设置
 
